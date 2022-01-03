@@ -29,6 +29,7 @@ from dagster.core.errors import (
     DagsterConfigMappingFunctionError,
     DagsterInvalidConfigError,
     DagsterInvalidDefinitionError,
+    DagsterInvalidInvocationError,
 )
 from dagster.loggers import json_console_logger
 
@@ -991,3 +992,23 @@ def test_graph_top_level_input():
     result = my_graph_with_nesting.execute_in_process(run_config={"inputs": {"x": {"value": 2}}})
     assert result.success
     assert result.output_for_node("my_graph.my_op") == 4
+
+
+def test_graph_with_invalid_op_invocation():
+    @op
+    def basic():
+        pass
+
+    @op
+    def shouldnt_work():
+        basic()
+
+    @graph
+    def the_graph():
+        shouldnt_work()
+
+    with pytest.raises(
+        DagsterInvalidInvocationError,
+        match="Attempted to invoke @op 'basic' within @op 'shouldnt_work', which is undefined behavior.",
+    ):
+        the_graph.execute_in_process()
